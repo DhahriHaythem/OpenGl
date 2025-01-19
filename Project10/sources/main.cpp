@@ -15,6 +15,7 @@ int WINDOW_HEIGHT = 768;
 GLFWwindow* pWindow = NULL;
 bool gWireframe = false;
 const std::string texture1Filename = "Textures/wooden_crate.jpg";
+const std::string texture2Filename = "Textures/grid.jpg";
 
 OrbitCamera gCamera;
 float gYaw = 0.0f;
@@ -111,8 +112,9 @@ int main()
 	ProgramShader programShader;
 	programShader.loadShaders("ShadersFiles/basic.vert", "ShadersFiles/basic.frag");
 
-	Texture2D texture;
-	texture.loadTexture(texture1Filename, true);
+	Texture2D texture1, texture2;
+	texture1.loadTexture(texture1Filename, true);
+	texture2.loadTexture(texture2Filename, true);
 
 	while (!glfwWindowShouldClose(pWindow))
 	{
@@ -124,9 +126,6 @@ int main()
 		glfwPollEvents();
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		texture.bind();
-
 
 		glm::mat4 model, view, projection;
 		model = view = projection = glm::mat4(1.0f);
@@ -148,7 +147,15 @@ int main()
 		programShader.setUniform("projection", projection);
 
 		glBindVertexArray(vao);
+		texture1.bind();
 		glDrawArrays(GL_TRIANGLES, 0, 36);
+
+		texture2.bind();
+		glm::vec3 floorPos = glm::vec3(0.0f, -1.0f,0.0f);
+		model = glm::translate(model, floorPos) * glm::scale(model, glm::vec3(10.0f, 0.01f, 10.0f));
+		programShader.setUniform("model", model);
+		glDrawArrays(GL_TRIANGLES, 0, 36);
+
 		glBindVertexArray(0);
 
 		glfwSwapBuffers(pWindow);
