@@ -9,7 +9,7 @@
 #include "Camera.h"
 
 const char* APP_TITLE = "Introduction to Modern OpenGL - Hello Triangle";
-const float MOUSE_SENSITIVITY = 0.25f;
+
 int WINDOW_WIDTH = 1024;
 int WINDOW_HEIGHT = 768;
 GLFWwindow* pWindow = NULL;
@@ -17,14 +17,16 @@ bool gWireframe = false;
 const std::string texture1Filename = "Textures/wooden_crate.jpg";
 const std::string texture2Filename = "Textures/grid.jpg";
 
-OrbitCamera gCamera;
-float gYaw = 0.0f;
-float gPitch = 0.0f;
-float gRadius = 10.0f;
+FPSCamera fpsCamera(glm::vec3(0.0f, 0.0f, 5.0f));
+const double ZOOM_SENSITIVITY = -3.0f;
+const float MOVE_SPEED = 5.0f;
+const float MOUSE_SENSITIVITY = 0.1f;
 
 void glfw_Onkey(GLFWwindow* window, int key, int scancode, int action, int mode);
 void glfw_OnFrameBufferSize(GLFWwindow* window, int width, int height);
 void glfw_OnMouseMove(GLFWwindow* window, double posX, double posY);
+void glfw_OnMouseScroll(GLFWwindow* window, double deltaX, double deltaY);
+void update(double elapsedTime);
 void showFPS(GLFWwindow* window);
 bool InitOpenGL();
 
@@ -89,7 +91,7 @@ int main()
 	};
 
 	glm::vec3 cubePos = glm::vec3(0.0f, 0.0f, -5.0f);
-
+	glm::vec3 floorPos = glm::vec3(0.0f, -1.0f, 0.0f);
 	
 	double lastTime = glfwGetTime();
 
@@ -124,21 +126,17 @@ int main()
 		double deltaTime = currentTime - lastTime;
 
 		glfwPollEvents();
-
+		update(deltaTime);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		glm::mat4 model, view, projection;
 		model = view = projection = glm::mat4(1.0f);
 
-		gCamera.setLookAt(cubePos);
-		gCamera.rotate(gYaw, gPitch);
-		gCamera.setRadius(gRadius);
-
 		model = glm::translate(model, cubePos);
 
-		view = gCamera.getViewMatrix();
+		view = fpsCamera.getViewMatrix();
 
-		projection = glm::perspective(glm::radians(45.0f), (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 100.0f);
+		projection = glm::perspective(glm::radians(fpsCamera.getFOV()), (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 100.0f);
 
 		programShader.use();
 
@@ -151,7 +149,7 @@ int main()
 		glDrawArrays(GL_TRIANGLES, 0, 36);
 
 		texture2.bind();
-		glm::vec3 floorPos = glm::vec3(0.0f, -1.0f,0.0f);
+		
 		model = glm::translate(model, floorPos) * glm::scale(model, glm::vec3(10.0f, 0.01f, 10.0f));
 		programShader.setUniform("model", model);
 		glDrawArrays(GL_TRIANGLES, 0, 36);
@@ -197,6 +195,10 @@ bool InitOpenGL()
 	glfwSetKeyCallback(pWindow, glfw_Onkey);
 	glfwSetFramebufferSizeCallback(pWindow, glfw_OnFrameBufferSize);
 	glfwSetCursorPosCallback(pWindow, glfw_OnMouseMove);
+	glfwSetScrollCallback(pWindow, glfw_OnMouseScroll);
+
+	glfwSetInputMode(pWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwSetCursorPos(pWindow, WINDOW_WIDTH / 2.0, WINDOW_HEIGHT / 2.0);
 
 	GLboolean glewExperimental = GL_TRUE;
 	if (glewInit() != GLEW_OK)
@@ -243,32 +245,62 @@ void glfw_OnFrameBufferSize(GLFWwindow* window, int width, int height)
 
 void glfw_OnMouseMove(GLFWwindow* window, double posX, double posY)
 {
-	static glm::vec2 lastMousePos = glm::vec2(0.0f, 0.0f);
+	//static glm::vec2 lastMousePos = glm::vec2(0.0f, 0.0f);
 
-	float x = (float)posX;
-	float y = (float)posY;
-	std::cout << "mouse x =" << x << std::endl;
-	std::cout << "mouse y =" << y << std::endl;
+	//float x = (float)posX;
+	//float y = (float)posY;
 
-	float dx = x - lastMousePos.x;
-	float dy = y - lastMousePos.y;
-	std::cout << "dx =" << dx << std::endl;
-	std::cout << "dy =" << dy << std::endl;
+	//float dx = x - lastMousePos.x;
+	//float dy = y - lastMousePos.y;
 
-	//update angle based on left mouse button
-	if (glfwGetMouseButton(pWindow, GLFW_MOUSE_BUTTON_LEFT) == 1)
-	{
-		gYaw -= dx * MOUSE_SENSITIVITY;
-		std::cout << "gYaw =" << gYaw << std::endl;
-		gPitch += dy * MOUSE_SENSITIVITY;
-	}
+	////update angle based on left mouse button
+	//if (glfwGetMouseButton(pWindow, GLFW_MOUSE_BUTTON_LEFT) == 1)
+	//{
+	//	gYaw -= dx * MOUSE_SENSITIVITY;
+	//	gPitch += dy * MOUSE_SENSITIVITY;
+	//}
 
-	if (glfwGetMouseButton(pWindow, GLFW_MOUSE_BUTTON_RIGHT) == 1)
-	{
-		gRadius += 0.01f * (dx - dy);
-	}
-	lastMousePos.x = x;
-	lastMousePos.y = y;
+	//if (glfwGetMouseButton(pWindow, GLFW_MOUSE_BUTTON_RIGHT) == 1)
+	//{
+	//	gRadius += 0.01f * (dx - dy);
+	//}
+	//lastMousePos.x = x;
+	//lastMousePos.y = y;
+}
+
+void glfw_OnMouseScroll(GLFWwindow* window, double deltaX, double deltaY)
+{
+	double fov = fpsCamera.getFOV() + deltaY * ZOOM_SENSITIVITY;
+
+	fov = glm::clamp<double>(fov, 1.0, 120.0);
+
+	fpsCamera.setFOV((float)fov);
+}
+
+void update(double elapseTime)
+{
+	double mouseX, mouseY;
+
+	glfwGetCursorPos(pWindow, &mouseX, &mouseY);
+
+	fpsCamera.rotate(((float)WINDOW_WIDTH / 2.0f - (float)mouseX) * MOUSE_SENSITIVITY, ((float)WINDOW_HEIGHT / 2.0f - (float)mouseY) * MOUSE_SENSITIVITY);
+
+	glfwSetCursorPos(pWindow, (float)WINDOW_WIDTH / 2.0f, (float)WINDOW_HEIGHT / 2.0f);
+
+	if (glfwGetKey(pWindow, GLFW_KEY_W) == GLFW_PRESS)
+		fpsCamera.move(MOVE_SPEED*(float)elapseTime * fpsCamera.getLook());
+	else if (glfwGetKey(pWindow, GLFW_KEY_S) == GLFW_PRESS)
+		fpsCamera.move(MOVE_SPEED * (float)elapseTime * -fpsCamera.getLook());
+
+	if (glfwGetKey(pWindow, GLFW_KEY_A) == GLFW_PRESS)
+		fpsCamera.move(MOVE_SPEED * (float)elapseTime * fpsCamera.getRight());
+	else if (glfwGetKey(pWindow, GLFW_KEY_D) == GLFW_PRESS)
+		fpsCamera.move(MOVE_SPEED * (float)elapseTime * -fpsCamera.getRight());
+
+	if (glfwGetKey(pWindow, GLFW_KEY_Z) == GLFW_PRESS)
+		fpsCamera.move(MOVE_SPEED * (float)elapseTime * fpsCamera.getUp());
+	else if (glfwGetKey(pWindow, GLFW_KEY_X) == GLFW_PRESS)
+		fpsCamera.move(MOVE_SPEED * (float)elapseTime * -fpsCamera.getUp());
 }
 
 void showFPS(GLFWwindow* window)
